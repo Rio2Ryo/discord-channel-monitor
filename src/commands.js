@@ -24,6 +24,21 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   new SlashCommandBuilder()
+    .setName('watchhere')
+    .setDescription('このスレッド/チャンネルを監視対象に追加（スレッド用）')
+    .addIntegerOption(opt =>
+      opt.setName('threshold').setDescription('停止判定の秒数（デフォルト: 180）').setRequired(false)
+    )
+    .addStringOption(opt =>
+      opt.setName('mentions').setDescription('声かけ時にメンションするユーザー/ロールID（カンマ区切り）').setRequired(false)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+  new SlashCommandBuilder()
+    .setName('unwatchhere')
+    .setDescription('このスレッド/チャンネルの監視を解除'),
+
+  new SlashCommandBuilder()
     .setName('watchlist')
     .setDescription('監視中チャンネル一覧を表示'),
 

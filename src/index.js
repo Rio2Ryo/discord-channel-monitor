@@ -124,6 +124,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.log(`[Cmd] /unwatch #${channel.name}`);
   }
 
+  else if (commandName === 'watchhere') {
+    const channelId = interaction.channelId;
+    const threshold = interaction.options.getInteger('threshold') || 180;
+    const mentions = interaction.options.getString('mentions') || '';
+    const guildId = interaction.guildId;
+
+    stmts.addChannel.run(channelId, guildId, threshold, mentions);
+
+    const existing = stmts.getState.get(channelId);
+    if (!existing) {
+      stmts.upsertState.run(channelId);
+    }
+
+    const mentionInfo = mentions ? `\n📢 メンション対象: ${mentions.split(',').map(id => `<@${id.trim()}>`).join(' ')}` : '';
+    await interaction.reply(`✅ このチャンネル/スレッドを監視対象に追加しました（閾値: ${threshold}秒）${mentionInfo}`);
+    console.log(`[Cmd] /watchhere ${channelId} (${threshold}s, mentions: ${mentions})`);
+  }
+
+  else if (commandName === 'unwatchhere') {
+    const channelId = interaction.channelId;
+    stmts.removeChannel.run(channelId);
+    await interaction.reply(`🗑️ このチャンネル/スレッドの監視を解除しました`);
+    console.log(`[Cmd] /unwatchhere ${channelId}`);
+  }
+
   else if (commandName === 'watchlist') {
     const channels = stmts.listChannels.all();
     if (channels.length === 0) {
