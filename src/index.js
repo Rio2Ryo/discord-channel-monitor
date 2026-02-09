@@ -123,8 +123,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // Ready
 client.once(Events.ClientReady, async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
-  await registerCommands();
-  await startMonitor(client);
+  try {
+    await registerCommands();
+  } catch (err) {
+    console.error('[Bot] Failed to register commands:', err.message);
+  }
+  try {
+    await startMonitor(client);
+  } catch (err) {
+    console.error('[Bot] Failed to start monitor:', err);
+    process.exit(1);
+  }
 });
 
 client.login(TOKEN);
