@@ -15,6 +15,7 @@ db.exec(`
     guild_id TEXT NOT NULL,
     threshold_sec INTEGER NOT NULL DEFAULT 180,
     cooldown_sec INTEGER NOT NULL DEFAULT 600,
+    mention_ids TEXT NOT NULL DEFAULT '',
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -31,11 +32,18 @@ db.exec(`
   );
 `);
 
+// Migration: add mention_ids column if missing
+try {
+  db.exec(`ALTER TABLE watched_channels ADD COLUMN mention_ids TEXT NOT NULL DEFAULT ''`);
+} catch (e) {
+  // Column already exists
+}
+
 // Prepared statements
 const stmts = {
   addChannel: db.prepare(`
-    INSERT OR REPLACE INTO watched_channels (channel_id, guild_id, threshold_sec)
-    VALUES (?, ?, ?)
+    INSERT OR REPLACE INTO watched_channels (channel_id, guild_id, threshold_sec, mention_ids)
+    VALUES (?, ?, ?, ?)
   `),
   removeChannel: db.prepare(`
     DELETE FROM watched_channels WHERE channel_id = ?

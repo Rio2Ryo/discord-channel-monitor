@@ -10,6 +10,9 @@ const commands = [
     .addIntegerOption(opt =>
       opt.setName('threshold').setDescription('停止判定の秒数（デフォルト: 180）').setRequired(false)
     )
+    .addStringOption(opt =>
+      opt.setName('mentions').setDescription('声かけ時にメンションするユーザー/ロールID（カンマ区切り）').setRequired(false)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   new SlashCommandBuilder()

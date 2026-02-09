@@ -59,7 +59,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const threshold = interaction.options.getInteger('threshold') || 180;
     const guildId = interaction.guildId;
 
-    stmts.addChannel.run(channel.id, guildId, threshold);
+    const mentions = interaction.options.getString('mentions') || '';
+
+    stmts.addChannel.run(channel.id, guildId, threshold, mentions);
 
     // Initialize state
     const existing = stmts.getState.get(channel.id);
@@ -67,8 +69,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       stmts.upsertState.run(channel.id);
     }
 
-    await interaction.reply(`✅ <#${channel.id}> を監視対象に追加しました（閾値: ${threshold}秒）`);
-    console.log(`[Cmd] /watch #${channel.name} (${threshold}s)`);
+    const mentionInfo = mentions ? `\n📢 メンション対象: ${mentions.split(',').map(id => `<@${id.trim()}>`).join(' ')}` : '\n⚠️ メンション対象が未設定です。`mentions` オプションでユーザー/ロールIDを指定してください。';
+    await interaction.reply(`✅ <#${channel.id}> を監視対象に追加しました（閾値: ${threshold}秒）${mentionInfo}`);
+    console.log(`[Cmd] /watch #${channel.name} (${threshold}s, mentions: ${mentions})`);
   }
 
   else if (commandName === 'unwatch') {
