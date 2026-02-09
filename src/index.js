@@ -15,6 +15,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
   ],
+  // Threads are auto-joined by default in discord.js v14
   partials: [Partials.Message, Partials.Reaction],
 });
 
@@ -77,6 +78,25 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     console.log(`[Reaction] ${emoji} by ${user.tag} → ${newStatus} in ${channelId}`);
   } catch (err) {
     console.error('[Reaction] Error handling reaction:', err.message);
+  }
+});
+
+// Auto-watch new threads under watched parent channels
+client.on(Events.ThreadCreate, async (thread) => {
+  try {
+    const parentCh = stmts.getChannel.get(thread.parentId);
+    if (!parentCh || !parentCh.enabled) return;
+
+    // Register thread with same settings as parent
+    stmts.addChannel.run(thread.id, thread.guildId, parentCh.threshold_sec, parentCh.mention_ids || '');
+    stmts.upsertState.run(thread.id);
+
+    // Join the thread so we can send messages
+    if (thread.joinable) await thread.join();
+
+    console.log(`[Thread] Auto-watching new thread #${thread.name} (parent: ${thread.parentId})`);
+  } catch (err) {
+    console.error('[Thread] Error auto-watching:', err.message);
   }
 });
 
@@ -163,6 +183,31 @@ client.once(Events.ClientReady, async () => {
   } catch (err) {
     console.error('[Bot] Failed to register commands:', err.message);
   }
+  // Auto-watch active threads under watched channels
+  try {
+    const watchedChannels = stmts.listChannels.all();
+    for (const wc of watchedChannels) {
+      try {
+        const ch = await client.channels.fetch(wc.channel_id).catch(() => null);
+        if (!ch || !ch.threads) continue;
+        const activeThreads = await ch.threads.fetchActive().catch(() => null);
+        if (!activeThreads) continue;
+        for (const [threadId, thread] of activeThreads.threads) {
+          if (!stmts.getChannel.get(threadId)) {
+            stmts.addChannel.run(threadId, wc.guild_id, wc.threshold_sec, wc.mention_ids || '');
+            stmts.upsertState.run(threadId);
+            if (thread.joinable) await thread.join();
+            console.log(`[Startup] Auto-watching existing thread #${thread.name}`);
+          }
+        }
+      } catch (e) {
+        // Skip channels we can't access
+      }
+    }
+  } catch (err) {
+    console.error('[Bot] Error scanning threads:', err.message);
+  }
+
   try {
     await startMonitor(client);
   } catch (err) {
