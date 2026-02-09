@@ -1,8 +1,8 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, REST, Routes, Events } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, Events, Partials } = require('discord.js');
 const { commands } = require('./commands');
 const { stmts, db } = require('./db');
-const { startMonitor } = require('./monitor');
+const { startMonitor, REACTION_MAP } = require('./monitor');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
@@ -13,7 +13,9 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
   ],
+  partials: [Partials.Message, Partials.Reaction],
 });
 
 // Register slash commands
@@ -46,6 +48,36 @@ client.on(Events.MessageCreate, (message) => {
   }
 
   console.log(`[Event] Message in #${message.channel.name} - set active`);
+});
+
+// Handle reactions on bot nudge messages → auto status update
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    // Fetch partial if needed
+    if (reaction.partial) await reaction.fetch();
+    if (reaction.message.partial) await reaction.message.fetch();
+
+    // Only react to reactions on THIS bot's messages
+    if (reaction.message.author.id !== client.user.id) return;
+    // Ignore bot reactions
+    if (user.bot) return;
+
+    const emoji = reaction.emoji.name;
+    const newStatus = REACTION_MAP[emoji];
+    if (!newStatus) return;
+
+    const channelId = reaction.message.channelId;
+    const ch = stmts.getChannel.get(channelId);
+    if (!ch) return;
+
+    stmts.setStatus.run(newStatus, null, channelId);
+
+    const statusLabel = { active: '進行中 🟢', stalled: '停止中 🔴', waiting_confirmation: '確認待ち 🟡' };
+    await reaction.message.reply(`✅ ${statusLabel[newStatus]} に変更しました（${user.displayName} が ${emoji} で更新）`);
+    console.log(`[Reaction] ${emoji} by ${user.tag} → ${newStatus} in ${channelId}`);
+  } catch (err) {
+    console.error('[Reaction] Error handling reaction:', err.message);
+  }
 });
 
 // Handle slash commands

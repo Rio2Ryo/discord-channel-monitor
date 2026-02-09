@@ -3,8 +3,18 @@ const { getTemplate } = require('./templates');
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
+// Reaction → status mapping
+const REACTION_MAP = {
+  '👍': 'active',           // 続行
+  '⏳': 'waiting_confirmation', // 確認待ち
+  '🛑': 'active',           // 終了（reset to active, stop nudging via cooldown)
+};
+
+const REACTION_EMOJIS = Object.keys(REACTION_MAP);
+
 async function startMonitor(client) {
   console.log('[Monitor] Starting channel monitor (interval: 30s)');
+  console.log('[Monitor] Reaction status update enabled:', REACTION_EMOJIS.join(' '));
 
   setInterval(async () => {
     try {
@@ -60,13 +70,23 @@ async function nudgeChannel(client, channelId, status, cooldownSec, mentions, re
     const message = getTemplate(status, mentions, reason);
 
     if (message) {
-      await channel.send(message);
+      const sent = await channel.send(message);
+
+      // Add reaction buttons for status update
+      for (const emoji of REACTION_EMOJIS) {
+        try {
+          await sent.react(emoji);
+        } catch (e) {
+          console.error(`[Monitor] Failed to add reaction ${emoji}:`, e.message);
+        }
+      }
+
       stmts.setBotMessage.run(cooldownSec, channelId);
-      console.log(`[Monitor] Nudged #${channel.name} (${status}) with mentions: ${mentions || 'none'}`);
+      console.log(`[Monitor] Nudged #${channel.name} (${status}) with mentions: ${mentions || 'none'} + reactions`);
     }
   } catch (err) {
     console.error(`[Monitor] Failed to nudge ${channelId}:`, err.message);
   }
 }
 
-module.exports = { startMonitor };
+module.exports = { startMonitor, REACTION_MAP };
