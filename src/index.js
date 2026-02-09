@@ -81,13 +81,21 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   }
 });
 
-// Join threads so bot can send messages when manually watched
+// Auto-watch new threads under watched parent channels
 client.on(Events.ThreadCreate, async (thread) => {
   try {
     if (thread.joinable) await thread.join();
-    console.log(`[Thread] Joined thread #${thread.name}`);
+
+    const parentCh = stmts.getChannel.get(thread.parentId);
+    if (!parentCh || !parentCh.enabled) return;
+
+    // Auto-register with parent's settings
+    stmts.addChannel.run(thread.id, thread.guildId, parentCh.threshold_sec, parentCh.mention_ids || '');
+    stmts.upsertState.run(thread.id);
+
+    console.log(`[Thread] Auto-watching new thread #${thread.name} (parent: ${thread.parentId})`);
   } catch (err) {
-    // Ignore
+    console.error('[Thread] Error auto-watching:', err.message);
   }
 });
 
@@ -199,22 +207,39 @@ client.once(Events.ClientReady, async () => {
   } catch (err) {
     console.error('[Bot] Failed to register commands:', err.message);
   }
-  // Join existing threads that are being watched
+  // Auto-watch active threads under watched channels on startup
   try {
     const watchedChannels = stmts.listChannels.all();
     for (const wc of watchedChannels) {
       try {
         const ch = await client.channels.fetch(wc.channel_id).catch(() => null);
-        if (ch && ch.isThread && ch.isThread() && ch.joinable) {
+        if (!ch) continue;
+
+        // If it's a thread, just join it
+        if (ch.isThread && ch.isThread() && ch.joinable) {
           await ch.join();
-          console.log(`[Startup] Joined watched thread #${ch.name}`);
+          continue;
+        }
+
+        // If it's a text channel with threads, scan and auto-register
+        if (ch.threads) {
+          const activeThreads = await ch.threads.fetchActive().catch(() => null);
+          if (!activeThreads) continue;
+          for (const [threadId, thread] of activeThreads.threads) {
+            if (!stmts.getChannel.get(threadId)) {
+              stmts.addChannel.run(threadId, wc.guild_id, wc.threshold_sec, wc.mention_ids || '');
+              stmts.upsertState.run(threadId);
+              if (thread.joinable) await thread.join();
+              console.log(`[Startup] Auto-watching thread #${thread.name}`);
+            }
+          }
         }
       } catch (e) {
         // Skip channels we can't access
       }
     }
   } catch (err) {
-    console.error('[Bot] Error joining threads:', err.message);
+    console.error('[Bot] Error scanning threads:', err.message);
   }
 
   try {
