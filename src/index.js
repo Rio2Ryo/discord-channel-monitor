@@ -178,6 +178,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   else if (commandName === 'unwatch') {
     const channel = interaction.options.getChannel('channel');
+    stmts.removeState.run(channel.id);
     stmts.removeChannel.run(channel.id);
     await interaction.reply(`🗑️ <#${channel.id}> の監視を解除しました`);
     console.log(`[Cmd] /unwatch #${channel.name}`);
@@ -203,6 +204,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   else if (commandName === 'unwatchhere') {
     const channelId = interaction.channelId;
+    stmts.removeState.run(channelId);
     stmts.removeChannel.run(channelId);
     await interaction.reply(`🗑️ このチャンネル/スレッドの監視を解除しました`);
     console.log(`[Cmd] /unwatchhere ${channelId}`);

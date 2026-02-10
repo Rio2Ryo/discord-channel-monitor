@@ -45,6 +45,9 @@ const stmts = {
     INSERT OR REPLACE INTO watched_channels (channel_id, guild_id, threshold_sec, mention_ids)
     VALUES (?, ?, ?, ?)
   `),
+  removeState: db.prepare(`
+    DELETE FROM channel_state WHERE channel_id = ?
+  `),
   removeChannel: db.prepare(`
     DELETE FROM watched_channels WHERE channel_id = ?
   `),
