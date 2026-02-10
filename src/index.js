@@ -35,7 +35,8 @@ async function registerCommands() {
 
 // Handle messages - update last_message_at
 client.on(Events.MessageCreate, (message) => {
-  if (message.author.bot) return;
+  // Ignore own messages (Monitor bot) to avoid self-reset
+  if (message.author.id === client.user.id) return;
 
   const ch = stmts.getChannel.get(message.channelId);
   if (!ch) return;
