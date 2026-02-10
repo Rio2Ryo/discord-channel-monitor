@@ -58,10 +58,10 @@ function detectStatusIntent(text) {
   return null;
 }
 
-// Format datetime for SQLite
+// Format datetime for SQLite (UTC, matching datetime('now'))
 function formatDatetime(date) {
   const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
 }
 
 module.exports = { extractTime, getTargetTimestamp, detectStatusIntent, formatDatetime };
