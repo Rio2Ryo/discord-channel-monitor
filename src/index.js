@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, REST, Routes, Events, Partials } = require('d
 const { commands } = require('./commands');
 const { stmts, db } = require('./db');
 const { startMonitor, REACTION_MAP } = require('./monitor');
+const { extractTime, getTargetTimestamp, detectStatusIntent, formatDatetime } = require('./nlp');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
@@ -14,6 +15,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.MessageContent,
   ],
   // Threads are auto-joined by default in discord.js v14
   partials: [Partials.Message, Partials.Reaction],
@@ -50,6 +52,54 @@ client.on(Events.MessageCreate, (message) => {
   }
 
   console.log(`[Event] Message in #${message.channel.name} - set active`);
+
+  // Phase 2: Natural language response to nudge messages
+  // Check if this message is a reply to a Monitor nudge
+  if (message.reference && message.reference.messageId) {
+    try {
+      const refMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+      if (refMsg && refMsg.author.id === client.user.id) {
+        // This is a reply to our nudge message!
+        const content = message.content;
+        const channelId = message.channelId;
+        const ch = stmts.getChannel.get(channelId);
+        if (!ch) return;
+
+        // Extract time (e.g., "10:00投稿待ち" → cooldown until 10:00)
+        const time = extractTime(content);
+        if (time) {
+          const target = getTargetTimestamp(time);
+          const cooldownDatetime = formatDatetime(target);
+
+          // Set to waiting_confirmation with extended cooldown until the specified time
+          stmts.setStatus.run('waiting_confirmation', content, channelId);
+
+          // Update cooldown_until directly
+          db.prepare('UPDATE channel_state SET cooldown_until = ? WHERE channel_id = ?')
+            .run(cooldownDatetime, channelId);
+
+          const timeStr = `${String(time.hours).padStart(2, '0')}:${String(time.minutes).padStart(2, '0')}`;
+          await message.reply(`⏰ ${timeStr} まで待機します。その時間にリマインドしますね！`);
+          console.log(`[NLP] Time detected: ${timeStr} → cooldown until ${cooldownDatetime} in ${channelId}`);
+          return;
+        }
+
+        // Detect status intent
+        const intent = detectStatusIntent(content);
+        if (intent) {
+          const reason = intent === 'waiting_confirmation' ? content : null;
+          stmts.setStatus.run(intent, reason, channelId);
+
+          const statusLabel = { active: '進行中 🟢', waiting_confirmation: '確認待ち 🟡' };
+          await message.reply(`✅ ${statusLabel[intent]} に変更しました`);
+          console.log(`[NLP] Status intent: ${intent} in ${channelId}`);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[NLP] Error processing reply:', err.message);
+    }
+  }
 });
 
 // Handle reactions on bot nudge messages → auto status update
