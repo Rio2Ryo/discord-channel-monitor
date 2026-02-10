@@ -32,13 +32,13 @@ async function checkChannels(client) {
   for (const ch of channels) {
     if (!ch.last_message_at) continue;
 
-    const lastMsg = new Date(ch.last_message_at + 'Z').getTime();
+    const lastMsg = new Date(ch.last_message_at.replace(' ', 'T')).getTime();
     const elapsed = (now - lastMsg) / 1000;
     const thresholdSec = ch.threshold_sec || 180;
 
     // Check cooldown
     if (ch.cooldown_until) {
-      const cooldownEnd = new Date(ch.cooldown_until + 'Z').getTime();
+      const cooldownEnd = new Date(ch.cooldown_until.replace(' ', 'T')).getTime();
       if (now < cooldownEnd) continue;
     }
 
