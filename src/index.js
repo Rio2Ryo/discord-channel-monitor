@@ -36,7 +36,7 @@ async function registerCommands() {
 }
 
 // Handle messages - update last_message_at
-client.on(Events.MessageCreate, (message) => {
+client.on(Events.MessageCreate, async (message) => {
   // Ignore own messages (Monitor bot) to avoid self-reset
   if (message.author.id === client.user.id) return;
 
