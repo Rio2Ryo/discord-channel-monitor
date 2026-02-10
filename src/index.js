@@ -65,22 +65,24 @@ client.on(Events.MessageCreate, (message) => {
         const ch = stmts.getChannel.get(channelId);
         if (!ch) return;
 
-        // Extract time (e.g., "10:00投稿待ち" → cooldown until 10:00)
+        // Extract time (e.g., "10:00投稿待ち" → cooldown until 10:00 + 5min)
         const time = extractTime(content);
         if (time) {
           const target = getTargetTimestamp(time);
+          // Add 5 minutes after the specified time for the check
+          target.setMinutes(target.getMinutes() + 5);
           const cooldownDatetime = formatDatetime(target);
 
-          // Set to waiting_confirmation with extended cooldown until the specified time
+          // Set to waiting_confirmation with extended cooldown
           stmts.setStatus.run('waiting_confirmation', content, channelId);
 
-          // Update cooldown_until directly
+          // Update cooldown_until to specified time + 5min
           db.prepare('UPDATE channel_state SET cooldown_until = ? WHERE channel_id = ?')
             .run(cooldownDatetime, channelId);
 
           const timeStr = `${String(time.hours).padStart(2, '0')}:${String(time.minutes).padStart(2, '0')}`;
-          await message.reply(`⏰ ${timeStr} まで待機します。その時間にリマインドしますね！`);
-          console.log(`[NLP] Time detected: ${timeStr} → cooldown until ${cooldownDatetime} in ${channelId}`);
+          await message.reply(`⏰ ${timeStr} まで待機します。${timeStr}の5分後に確認しますね！`);
+          console.log(`[NLP] Time detected: ${timeStr} → cooldown until ${cooldownDatetime} (${timeStr}+5min) in ${channelId}`);
           return;
         }
 
@@ -90,9 +92,13 @@ client.on(Events.MessageCreate, (message) => {
           const reason = intent === 'waiting_confirmation' ? content : null;
           stmts.setStatus.run(intent, reason, channelId);
 
+          // When setting to active, add cooldown so we don't immediately ask again
+          const cooldownSec = ch.cooldown_sec || 600;
+          stmts.setBotMessage.run(cooldownSec, channelId);
+
           const statusLabel = { active: '進行中 🟢', waiting_confirmation: '確認待ち 🟡' };
           await message.reply(`✅ ${statusLabel[intent]} に変更しました`);
-          console.log(`[NLP] Status intent: ${intent} in ${channelId}`);
+          console.log(`[NLP] Status intent: ${intent} (+ ${cooldownSec}s cooldown) in ${channelId}`);
           return;
         }
       }
@@ -124,9 +130,13 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 
     stmts.setStatus.run(newStatus, null, channelId);
 
+    // Always set cooldown when status is changed via reaction (prevent immediate re-nudge)
+    const cooldownSec = ch.cooldown_sec || 600;
+    stmts.setBotMessage.run(cooldownSec, channelId);
+
     const statusLabel = { active: '進行中 🟢', stalled: '停止中 🔴', waiting_confirmation: '確認待ち 🟡' };
     await reaction.message.reply(`✅ ${statusLabel[newStatus]} に変更しました（${user.displayName} が ${emoji} で更新）`);
-    console.log(`[Reaction] ${emoji} by ${user.tag} → ${newStatus} in ${channelId}`);
+    console.log(`[Reaction] ${emoji} by ${user.tag} → ${newStatus} (+ ${cooldownSec}s cooldown) in ${channelId}`);
   } catch (err) {
     console.error('[Reaction] Error handling reaction:', err.message);
   }
@@ -243,12 +253,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     stmts.setStatus.run(status, reason, channelId);
 
+    // Set cooldown to prevent immediate re-nudge after status change
+    const cooldownSec = ch.cooldown_sec || 600;
+    stmts.setBotMessage.run(cooldownSec, channelId);
+
     const statusLabel = { active: '進行中 🟢', stalled: '停止中 🔴', waiting_confirmation: '確認待ち 🟡' };
     let reply = `✅ ステータスを **${statusLabel[status]}** に変更しました`;
     if (reason) reply += `\n📝 理由: ${reason}`;
 
     await interaction.reply(reply);
-    console.log(`[Cmd] /setstatus ${status} in #${interaction.channel.name}`);
+    console.log(`[Cmd] /setstatus ${status} (+ ${cooldownSec}s cooldown) in #${interaction.channel.name}`);
   }
 });
 
